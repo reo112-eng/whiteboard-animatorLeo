@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ホワイトボードアニメーション ジェネレーター</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>✍️ ホワイトボードアニメーション ジェネレーター</h1>
+  <p class="subtitle">画像を、手とペンでなぞり描きしているような動画に変換します。</p>
+</header>
+
+<main>
+  <!-- STEP 1: 画像アップロード -->
+  <section class="panel" id="panel-upload">
+    <h2><span class="step">1</span>画像をアップロード</h2>
+    <div class="upload-grid">
+      <div class="upload-box">
+        <label class="upload-label" for="sourceImageInput">
+          元イラスト画像 <span class="required">必須</span>
+        </label>
+        <div class="drop-area" id="sourceDropArea">
+          <img id="sourceThumb" class="thumb hidden" alt="元イラストのプレビュー">
+          <span id="sourcePlaceholder" class="placeholder">クリックまたはドラッグ&ドロップで画像を選択</span>
+        </div>
+        <input type="file" id="sourceImageInput" accept="image/*" class="hidden-input">
+      </div>
+
+      <div class="upload-box">
+        <label class="upload-label" for="handImageInput">
+          手・ペン画像(画材) <span class="optional">任意</span>
+        </label>
+        <div class="drop-area" id="handDropArea">
+          <img id="handThumb" class="thumb hidden" alt="手・ペン画像のプレビュー">
+          <span id="handPlaceholder" class="placeholder">ここに手・ペン画像をアップロード(未指定の場合カーソルは表示されません)</span>
+        </div>
+        <input type="file" id="handImageInput" accept="image/*" class="hidden-input">
+        <p class="hint">アップロードすると、ペン先位置の指定が必要になります(下に表示)。</p>
+      </div>
+    </div>
+
+    <div id="handCalibWrap" class="hidden">
+      <h3>ペン先の指定</h3>
+      <p class="hint">ペン先(描画する先端)をクリックしてください</p>
+      <canvas id="handCalibCanvas"></canvas>
+      <p id="handCalibStatus" class="hint"></p>
+      <button id="handCalibResetBtn" class="btn btn-secondary" type="button">やり直す</button>
+    </div>
+  </section>
+
+  <!-- STEP 2: 設定 -->
+  <section class="panel" id="panel-settings">
+    <h2><span class="step">2</span>描画スタイルの設定</h2>
+    <p class="hint">描画中はクレヨン風のスケッチ線(+塗り)で表示され、描き終わると元画像そのものへ滑らかに切り替わります。描画過程では、完成図で薄い色の場所に濃い線を引かないようにしています。</p>
+
+    <div class="field" style="max-width:320px; margin-bottom:16px;">
+      <label for="stylePresetSelect">プリセット</label>
+      <select id="stylePresetSelect">
+        <option value="" selected>プリセットを選ぶ(任意)</option>
+        <option value="illustration-pen">図(ペン)</option>
+        <option value="illustration-crayon">図(クレヨン)</option>
+        <option value="illustration-brush">図(筆)</option>
+        <option value="text-pen">文字(ペン)</option>
+        <option value="text-crayon">文字(クレヨン)</option>
+        <option value="text-brush">文字(筆)</option>
+      </select>
+      <p class="hint small">選ぶと、画材・線の細かさ・線の太さがまとめて設定されます(下で個別に調整も可能)。</p>
+    </div>
+
+    <div class="settings-grid">
+      <div class="field">
+        <label for="detailSelect">線の細かさ</label>
+        <select id="detailSelect">
+          <option value="simple">シンプル(線が少ない・速い)</option>
+          <option value="normal" selected>標準</option>
+          <option value="detailed">精細(線が多い・遅い)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="colorModeSelect">線の色</label>
+        <select id="colorModeSelect">
+          <option value="original" selected>元画像の色を保持</option>
+          <option value="mono">単色ペン</option>
+        </select>
+      </div>
+
+      <div class="field" id="penColorField">
+        <label for="penColorInput">ペンの色</label>
+        <input type="color" id="penColorInput" value="#1a1a1a">
+      </div>
+
+      <div class="field">
+        <label for="fillCheckbox">描画後に色を塗る</label>
+        <label class="switch">
+          <input type="checkbox" id="fillCheckbox" checked>
+          <span>塗りつぶしを有効にする(完成図との差を減らせます)</span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="lineWidthRange">線の太さ: <output id="lineWidthOut">3</output>px</label>
+        <input type="range" id="lineWidthRange" min="1" max="10" value="3" step="1">
+      </div>
+
+      <div class="field">
+        <label for="handSizeRange">手のサイズ: <output id="handSizeOut">100</output>%</label>
+        <input type="range" id="handSizeRange" min="40" max="200" value="100" step="5">
+      </div>
+
+      <div class="field">
+        <label for="durationRange">描画時間: <output id="durationOut">14</output>秒</label>
+        <input type="range" id="durationRange" min="3" max="60" value="14" step="1">
+      </div>
+
+      <div class="field">
+        <label for="bgColorInput">背景色</label>
+        <input type="color" id="bgColorInput" value="#fefefe">
+      </div>
+    </div>
+
+    <button id="traceBtn" class="btn btn-primary" type="button" disabled>画像を解析して準備する</button>
+    <p id="traceStatus" class="hint"></p>
+  </section>
+
+  <!-- STEP 3: プレビュー -->
+  <section class="panel" id="panel-preview">
+    <h2><span class="step">3</span>プレビュー</h2>
+    <div class="canvas-wrap">
+      <canvas id="previewCanvas" width="900" height="675"></canvas>
+    </div>
+    <div class="controls-row">
+      <button id="playBtn" class="btn btn-primary" type="button" disabled>▶ 再生</button>
+      <button id="pauseBtn" class="btn btn-secondary" type="button" disabled>⏸ 一時停止</button>
+      <button id="restartBtn" class="btn btn-secondary" type="button" disabled>⟲ 最初から</button>
+      <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+    </div>
+  </section>
+
+  <!-- STEP 4: 書き出し -->
+  <section class="panel" id="panel-export">
+    <h2><span class="step">4</span>動画として書き出す</h2>
+    <div class="controls-row">
+      <button id="recordBtn" class="btn btn-primary" type="button" disabled>● 動画を録画(WebM)</button>
+      <button id="downloadWebmBtn" class="btn btn-secondary" type="button" disabled>WebMをダウンロード</button>
+      <button id="convertMp4Btn" class="btn btn-secondary" type="button" disabled>MP4に変換してダウンロード</button>
+    </div>
+    <p id="exportStatus" class="hint"></p>
+    <p class="hint small">※ 録画中はこのタブを表示したまま(他のタブに切り替えずに)お待ちください。バックグラウンドになるとブラウザが描画を一時停止し、録画が進まないことがあります。</p>
+    <p class="hint small">※ MP4変換はブラウザ内でffmpeg.wasm(約30MB)を読み込みます。初回はインターネット接続と少し時間が必要です。うまくいかない場合はWebMをそのままダウンロードしてください。</p>
+    <p class="hint small">※ 元画像が透過PNGの場合、プレビュー画面では背景が透過されますが、WebM/MP4は動画形式の仕様上、透過を保持できません。書き出した動画では透過部分が黒く表示されます。透過のまま使いたい場合は、プレビュー画面を透過対応のキャプチャソフトで録画してください。</p>
+  </section>
+</main>
+
+<footer>
+  <p>すべての処理はブラウザ内で完結します(画像・動画は外部送信されません)。</p>
+</footer>
+
+<!-- ジオメトリ計算専用の非表示SVG -->
+<svg id="geomSvg" xmlns="http://www.w3.org/2000/svg" style="position:fixed; left:-99999px; top:0; width:10px; height:10px; visibility:hidden;"></svg>
+
+<script src="js/imagetracer.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
